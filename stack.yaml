@@ -1,0 +1,10 @@
+resolver: lts-14.18
+flags: {}
+
+packages:
+  - .
+
+extra-deps:
+  - profunctors-5.5.1@sha256:48a53d69f997693db6b3fd339e92edea7776420ace5101737f037b04306096a7
+  - github: cmk/lawz
+    commit: 55c8dcdc6322f7c35c8568e1317afb5d35c3963d
