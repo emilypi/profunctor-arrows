@@ -1,5 +1,9 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
+#if __GLASGOW_HASKELL__ >= 806
+{-# LANGUAGE QuantifiedConstraints #-}
+#endif
 module Data.Profunctor.Arrow.Free where
 
 import Control.Arrow (Arrow)
@@ -16,9 +20,13 @@ import Prelude
 --
 newtype PArrow p a b = PArrow { runPArrow :: forall x y. p (b , x) y -> p (a , x) y }
 
+instance Profunctor p => Functor (PArrow p a) where
+  fmap f (PArrow pp) = PArrow (pp . dimap (k f) id)
+    where k g (b,x) = (g b, x)
+
 instance Profunctor p => Profunctor (PArrow p) where
-  dimap f g (PArrow pp) = PArrow $ \p -> dimap (lft f) id (pp (dimap (lft g) id p))
-    where lft h (a, b) = (h a, b)
+  dimap f g (PArrow pp) = PArrow $ \p -> dimap (k f) id (pp (dimap (k g) id p))
+    where k h (a, b) = (h a, b)
 
 instance Profunctor p => Category (PArrow p) where
   id = PArrow id
@@ -39,11 +47,17 @@ fromArrow x = PArrow (\z -> A.first x >>> z)
 -- | Free monoid in the category of profunctors.
 --
 -- See <https://arxiv.org/abs/1406.4823> section 6.2.
--- 
+--
 --
 data Free p a b where
   Parr :: (a -> b) -> Free p a b
   Free :: p x b -> Free p a x -> Free p a b
+
+#if __GLASGOW_HASKELL__ >= 806
+instance (forall t. Functor (p t)) => Functor (Free p a) where
+  fmap f (Parr k) = Parr (f . k)
+  fmap f (Free p q) = Free (fmap f p) q
+#endif
 
 instance Profunctor p => Profunctor (Free p) where
   dimap l r (Parr f) = Parr (dimap l r f)
@@ -89,6 +103,9 @@ hoistFree pq (Free p f) = Free (pq p) (hoistFree pq f)
 
 -- Analog of 'Const' for pliftows
 newtype Append r a b = Append { getAppend :: r }
+
+instance Functor (Append r a) where
+  fmap _ (Append r) = Append r
 
 instance Profunctor (Append r) where
   dimap _ _ (Append x) = Append x

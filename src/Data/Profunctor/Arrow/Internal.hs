@@ -4,17 +4,11 @@ module Data.Profunctor.Arrow.Internal where
 
 import Data.Functor.Compose (Compose(..))
 import Data.Functor.Identity (Identity(..))
-import Data.Kind
 import Data.Profunctor
 import Data.Profunctor.Arrow
-import Data.Profunctor.Choice
-import Data.Profunctor.Closed
-import Data.Profunctor.Mapping
 import Data.Profunctor.Monad
-import Data.Profunctor.Strong
 import Data.Profunctor.Traversing
 import Data.Profunctor.Unsafe
-import Data.Profunctor.Yoneda
 import Data.Void
 
 import Prelude
@@ -26,6 +20,9 @@ type family Arg2 (x :: * -> *) where Arg2 (f a b) = b
 
 --Trans m p ~ m f => (Costar f) `Procompose` p `Procompose` (Star f)
 data Trans m p a b = forall x y f. m f => Trans (a -> f x) (p x y) (f y -> b)
+
+instance Functor (Trans m p a) where
+  fmap f (Trans l p r) = Trans l p (f . r)
 
 instance Profunctor (Trans m p) where
   dimap f g (Trans l p r) = Trans (l . f) p (g . r)
@@ -91,7 +88,7 @@ closed_trans (Trans l p r) = Trans (\f (d , c) -> l (f d) c) p ((r .) . curry)
 affine :: Choice p => Strong p => p a b -> p (Affine c d a) (Affine c d b)
 affine = dimap unAffine Affine . right' . second'
 
-affine_lift :: p a b -> AffineT p a b 
+affine_lift :: p a b -> AffineT p a b
 affine_lift p = Trans (Affine . Right . ((,) ())) p (either absurd snd . unAffine)
 
 affine_trans :: AffineT p a b -> AffineT p (Affine c d a) (Affine c d b)
@@ -99,14 +96,14 @@ affine_trans (Trans l p r) = Trans (u l) p (v r)
   where
     u :: (s -> Affine c d a) -> Affine e f s -> Affine (Either e (f,c)) (f,d) a
     u _ (Affine (Left e))      = Affine $ Left $ Left e
-    u l (Affine (Right (f,s))) = Affine $ case unAffine (l s) of
+    u t (Affine (Right (f,s))) = Affine $ case unAffine (t s) of
       (Left c)      -> (Left (Right (f,c)))
       (Right (d,a)) -> (Right ((f,d),a))
 
     v :: (Affine c d b -> t) -> Affine (Either e (f,c)) (f,d) b -> Affine e f t
     v _ (Affine (Left  (Left e)))         = Affine $ Left e
-    v r (Affine (Left  (Right (f,c))))    = Affine $ Right (f,r $ Affine $ Left c)
-    v r (Affine (Right ((f,d),b)))        = Affine $ Right (f , r . Affine $ Right (d,b))
+    v k (Affine (Left  (Right (f,c))))    = Affine $ Right (f, k $ Affine $ Left c)
+    v k (Affine (Right ((f,d),b)))        = Affine $ Right (f, k . Affine $ Right (d,b))
 
 -- traversals
 
@@ -174,4 +171,3 @@ instance Closed (MappingT p) where closed = map'
 instance Traversing (MappingT p) where traverse' = map'
 
 instance Mapping (MappingT p) where map' = setter_trans
-
